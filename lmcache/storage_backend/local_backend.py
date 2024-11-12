@@ -34,14 +34,16 @@ class LMCLocalBackend(LMCBackendInterface):
     memory.
     """
 
-    def __init__(self, config: LMCacheEngineConfig,
-                 metadata: LMCacheMemPoolMetadata):
+    def __init__(self,
+                 config: LMCacheEngineConfig,
+                 metadata: LMCacheMemPoolMetadata,
+                 dst_device: str = "cuda"):
         """
         Throws:
             RuntimeError if the loaded configuration does not match the current
                 configuration
         """
-        super().__init__()
+        super().__init__(dst_device)
 
         self.chunk_size = config.chunk_size
         self.config = config
@@ -54,10 +56,6 @@ class LMCLocalBackend(LMCBackendInterface):
         self.put_thread = threading.Thread(target=self.put_worker, args=())
         self.put_thread.start()
         self.update_lock = threading.Lock()
-
-        # FIXME(Jiayi): `use_pin_memory` and `dst_device` should be configged
-        # dynamically
-        self.dst_device = "cuda"
 
         # TODO(Jiayi): The storage size and caching policy for both
         # evictor and mpool need to be configured dynamically
@@ -257,14 +255,16 @@ class LMCLocalDiskBackend(LMCBackendInterface):
     Cache engine for storing the KV cache of the tokens in the local disk.
     """
 
-    def __init__(self, config: LMCacheEngineConfig,
-                 metadata: LMCacheMemPoolMetadata):
+    def __init__(self,
+                 config: LMCacheEngineConfig,
+                 metadata: LMCacheMemPoolMetadata,
+                 dst_device: str = "cuda"):
         """
         Throws:
             RuntimeError if the loaded configuration does not match the current
                 configuration
         """
-        super().__init__()
+        super().__init__(dst_device)
 
         self.chunk_size = config.chunk_size
         self.config = config
@@ -289,9 +289,6 @@ class LMCLocalDiskBackend(LMCBackendInterface):
         self.put_thread = threading.Thread(target=self.put_worker, args=())
         self.put_thread.start()
         self.update_lock = threading.Lock()
-
-        # TODO (Jiayi): please remove this hard code
-        self.dst_device = "cuda"
 
         # TODO(Jiayi): The storage size and caching policy for both
         # evictor and mpool need to be configured dynamically
