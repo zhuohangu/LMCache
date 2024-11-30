@@ -71,6 +71,13 @@
             background-color: #b3b3b3; /* Darker grey when hovered */
         }
 
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #555;
+        }
+
     </style>
 </head>
 <body>
@@ -95,11 +102,14 @@
         <div id="calculation-steps"></div>
         <button id="githubButton" onclick="openGitHubRepo()">Contribute new models on GitHub</button>
     </div>
+    <footer>
+        Developed by Zhuohan Gu @ LMCache team
+    </footer>
     <script>
         let modelConfigs = {};
 
         function openGitHubRepo() {
-            const githubUrl = 'https://github.com/LMCache/LMCache/examples/kv_cache_calculator';
+            const githubUrl = 'https://github.com/LMCache/LMCache/issues/244#:~:text=https%3A//github.com/LMCache/LMCache/tree/dev/examples/kv_cache_calculator';
             window.open(githubUrl, '_blank');
         }
 
