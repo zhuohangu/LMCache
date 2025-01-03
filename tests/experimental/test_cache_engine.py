@@ -34,7 +34,7 @@ def test_same_retrieve_store(autorelease_experimental):
     with pytest.raises(AssertionError):
         check_kv_cache_equal(retrieved_cache, kv_cache, num_tokens, fmt)
     """ initialize the engine """
-    cfg = LMCacheEngineConfig.from_defaults(chunk_size=chunk_size)
+    cfg = LMCacheEngineConfig.from_legacy(chunk_size=chunk_size)
 
     engine = autorelease_experimental(
         LMCacheEngineBuilder.get_or_create("test", cfg,
@@ -126,8 +126,7 @@ def test_retrieve_prefix(fmt, chunk_size, backend, autorelease_experimental):
     check_kv_cache_equal(retrieved_cache, kv_cache, expected_length, fmt)
 
     if backend in ["local_disk"]:
-        subprocess.run(shlex.split("rm -rf local_disk/"))
-
+        subprocess.run(shlex.split("rm -rf /local/disk_test/local_disk/"))
     #engine.close()
     LMCacheEngineBuilder.destroy("test")
 
@@ -214,8 +213,8 @@ def test_mixed_retrieve(fmt, chunk_size, backend, autorelease_experimental):
 
     check_kv_cache_equal(retrieved_cache, final_kv_cache, expected_length, fmt)
     """destroy local disk path"""
-    if backend in ["local_disk/"]:
-        subprocess.run(shlex.split("rm -rf local_disk/"))
+    if backend in ["local_disk"]:
+        subprocess.run(shlex.split("rm -rf /local/disk_test/local_disk/"))
 
     #engine.close()
     LMCacheEngineBuilder.destroy("test")
@@ -385,12 +384,19 @@ def test_hierarchy_retrieve(fmt, chunk_size, backend, retrieve_from,
 
     assert length == expected_length
     check_kv_cache_equal(retrieved_cache, kv_cache, expected_length, fmt)
+    """ Wait until disk save is finished before deleting the directory"""
+    if backend in ["local_cpu_disk"]:
+        engine.storage_manager.hot_cache.clear()
+        timeout = 30
+        start_time = time.time()
+        while engine.lookup(tokens) < expected_length:
+            if time.time() - start_time > timeout:
+                raise TimeoutError(
+                    f"Operation timed out after {timeout} seconds.")
+            time.sleep(0.01)
 
     if backend in ["local_cpu_disk"]:
-        subprocess.run(shlex.split("rm -rf local_disk/"))
-
-    #engine.close()
-    LMCacheEngineBuilder.destroy("test")
+        subprocess.run(shlex.split("rm -rf /local/disk_test/local_disk/"))
 
 
 @pytest.mark.parametrize(
@@ -453,7 +459,7 @@ def test_prefetch_retrieve(backend, prefetch_from, autorelease_experimental):
                 raise TimeoutError(
                     f"Operation timed out after {timeout} seconds.")
             time.sleep(0.1)
-    """ Wait until disk load finishes and delete disk cache"""
+    """ Wait until disk load (prefetch) finishes and delete disk cache"""
     engine.prefetch(torch.cat([tokens, new_tokens]))
 
     if prefetch_from == "local_disk":
@@ -461,14 +467,10 @@ def test_prefetch_retrieve(backend, prefetch_from, autorelease_experimental):
         start_time = time.time()
         while engine.lookup(torch.cat([tokens, new_tokens]),
                             ["Hot"]) < expected_length:
-            #import pdb; pdb.set_trace()
             if time.time() - start_time > timeout:
-                import pdb
-                pdb.set_trace()
                 raise TimeoutError(
                     f"Operation timed out after {timeout} seconds.")
             time.sleep(0.01)
-        #import pdb; pdb.set_trace()
         engine.storage_manager.storage_backends["LocalDiskBackend"].dict.clear(
         )
     """ test retrieve """
@@ -484,8 +486,7 @@ def test_prefetch_retrieve(backend, prefetch_from, autorelease_experimental):
     check_kv_cache_equal(retrieved_cache, kv_cache, expected_length, fmt)
 
     if backend in ["local_cpu_disk"]:
-        subprocess.run(shlex.split("rm -rf local_disk/"))
-
+        subprocess.run(shlex.split("rm -rf /local/disk_test/local_disk/"))
     LMCacheEngineBuilder.destroy("test")
 
 
