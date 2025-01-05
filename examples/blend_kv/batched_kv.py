@@ -34,9 +34,12 @@ for chunk in chunks:
 time.sleep(3)
 print("Running the real query here!")
 
-user_prompt = [sys_prompt, chunks[0], chunks[1], question]
-user_prompt = combine_input_prompt_chunks(user_prompt)
-outputs = llm.generate(user_prompt, sampling_params_generation)
+user_prompt_one = [sys_prompt, chunks[0], question]
+user_prompt_two = [sys_prompt, chunks[1], question]
+user_prompt_one = combine_input_prompt_chunks(user_prompt_one)
+user_prompt_two = combine_input_prompt_chunks(user_prompt_two)
+outputs = llm.generate([user_prompt_one, user_prompt_two],
+                       sampling_params_generation)
 for output in outputs:
     generated_text = output.outputs[0].text
     print(f"Newly generated text: {generated_text!r}")

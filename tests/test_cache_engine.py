@@ -497,11 +497,11 @@ def test_env_configure():
     newconfig = LMCacheEngineConfig.from_env()
     for attr in fields(newconfig):
         value = getattr(newconfig, attr.name)
-        if isinstance(value, int) or isinstance(value, float):
+        if type(value) is int or type(value) is float:
             assert value == 0
-        elif isinstance(value, bool):
+        elif type(value) is bool:
             assert value is bool("0")
-        elif isinstance(value, str):
+        elif type(value) is str:
             assert value == "0"
         else:
             raise AssertionError("Unexpected type in LMCacheEngineConfig")
