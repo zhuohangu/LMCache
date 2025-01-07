@@ -3,6 +3,7 @@ from typing import Tuple, Union
 
 import torch
 
+import lmcache.c_ops as lmc_ops
 from lmcache.experimental.memory_management import (BufferMemoryObj,
                                                     MemoryFormat, MemoryObj)
 from lmcache.utils import _lmcache_nvtx_annotate
@@ -145,6 +146,96 @@ class VLLMNestedTupleGPUConnector(GPUConnectorInterface):
                     -1, self.hidden_dim_size).contiguous(),
                                                      non_blocking=True)
         put_stream.synchronize()
+        memory_obj.metadata.fmt = MemoryFormat.KV_BLOB
+
+    def get_shape(self, num_tokens: int) -> torch.Size:
+        return torch.Size(
+            [2, self.num_layers, num_tokens, self.hidden_dim_size])
+
+
+class VLLMPagedMemGPUConnector(GPUConnectorInterface):
+    """
+    The GPU KV cache should be a nested tuple of K and V tensors.
+    More specifically, we have:
+    - GPUTensor = Tuple[KVLayer, ...]
+    - KVLayer = Tuple[Tensor, Tensor]
+    - Tensor: [num_blocks, block_size, num_heads, head_size]
+
+    It will produce / consume memory object with KV_BLOB format
+    """
+
+    def __init__(self, hidden_dim_size: int, num_layers: int):
+        """
+        :param int gpu_token_dim: The token dimension of the GPU KV cache in
+            the nested tuple.
+        """
+        self.hidden_dim_size = hidden_dim_size
+        self.num_layers = num_layers
+
+    @_lmcache_nvtx_annotate
+    def to_gpu(self, memory_obj: Union[MemoryObj, BufferMemoryObj], start: int,
+               end: int, **kwargs):
+        """Expect a kwarg 'kvcaches' which is a nested tuple of K and V tensors.
+        The kvcaches should correspond to the "WHOLE token sequence".
+
+        :raises ValueError: If 'kvcaches' is not provided in kwargs.
+        :raises AssertionError: If the memory object does not have a tensor.
+        """
+        assert memory_obj.tensor is not None
+
+        if memory_obj.metadata.fmt != MemoryFormat.KV_BLOB:
+            raise ValueError(
+                "The memory object should be in KV_BLOB format in"
+                " order to be processed by NestedTupleGPUConnector")
+
+        if "kvcaches" not in kwargs:
+            raise ValueError("'kvcaches' should be provided in kwargs.")
+
+        if "slot_mapping" not in kwargs:
+            raise ValueError("'slot_mapping' should be provided in kwargs.")
+
+        kvcaches: Tuple[Tuple[torch.Tensor, ...], ...] = kwargs["kvcaches"]
+        slot_mapping: torch.Tensor = kwargs["slot_mapping"]
+
+        for layer_id, layer in enumerate(kvcaches):
+            k, v = layer[0], layer[1]
+            lmc_ops.reshape_and_cache_back_flash(memory_obj.tensor, k, v,
+                                                 slot_mapping[start:end],
+                                                 layer_id)
+
+        # TODO(Jiayi): Currently, this is a blocking operation.
+        # We might be able to continue other decode jobs while
+        # waiting for the copy to finish.
+
+    @_lmcache_nvtx_annotate
+    def from_gpu(self, memory_obj: MemoryObj, start: int, end: int, **kwargs):
+        """Expect a kwarg 'kvcaches' which is a nested tuple of K and V tensors.
+        The kvcaches should correspond to the "WHOLE token sequence".
+
+        :raises ValueError: If 'kvcaches' is not provided in kwargs, or the 
+            memory object is not in KV_BLOB format.
+        :raises AssertionError: If the memory object does not have a tensor.
+        """
+        assert memory_obj.tensor is not None
+
+        if "kvcaches" not in kwargs:
+            raise ValueError("'kvcaches' should be provided in kwargs.")
+
+        if "slot_mapping" not in kwargs:
+            raise ValueError("'slot_mapping' should be provided in kwargs.")
+
+        kvcaches: Tuple[Tuple[torch.Tensor, ...], ...] = kwargs["kvcaches"]
+        slot_mapping: torch.Tensor = kwargs["slot_mapping"]
+
+        # slot_mapping is a list
+        slot_mapping_gpu = torch.tensor(slot_mapping[start:end],
+                                        device=kvcaches[0][0].device)
+        for layer_id, layer in enumerate(kvcaches):
+            k, v = layer[0], layer[1]
+            lmc_ops.load_and_reshape_flash(memory_obj.tensor, k, v,
+                                           slot_mapping_gpu, layer_id)
+
+        torch.cuda.synchronize()
         memory_obj.metadata.fmt = MemoryFormat.KV_BLOB
 
     def get_shape(self, num_tokens: int) -> torch.Size:
