@@ -18,7 +18,7 @@ To get started, pull the official Docker image with the following command:
 
 .. code-block:: bash
 
-    docker pull lmcache/lmcache_vllm:lmcache-0.1.3
+    docker pull lmcache/lmcache_vllm:lmcache-0.1.4
 
 Running the Docker Container
 ---------------------------------------
@@ -84,7 +84,7 @@ Save the following YAML code to a file, such as ``example.yaml``, in the LMCache
     --env "VLLM_WORKER_MULTIPROC_METHOD=spawn"\
     --ipc=host \
     --network=host \
-    lmcache/lmcache_vllm:lmcache-0.1.3 \
+    lmcache/lmcache_vllm:lmcache-0.1.4 \
     $model --gpu-memory-utilization 0.7 --port 8000 \
 
 .. note::
@@ -120,6 +120,9 @@ To verify the setup, you can test it using the following ``curl`` command:
 Building Docker from Source
 ----------------------------
 
-.. code-block:: bash
+.. note::
 
-    # Coming soon
+    This section is for users who want to build the Docker image from source.
+    For this please visit the link here `lmcache-vllm <https://github.com/LMCache/lmcache-vllm/tree/dev/docker>`_.
+
+    
